@@ -1,9 +1,0 @@
-{
-  "type": "module",
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "next": "^15.4.6"
-  }
-}

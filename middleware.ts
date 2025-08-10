@@ -1,21 +1,14 @@
-// middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const config = {
-  // Skip static assets and API by default while debugging
-  matcher: ['/((?!_next/|favicon.ico|robots.txt|sitemap.xml|api/).*)'],
-};
-
-export function middleware(_req: NextRequest) {
-  try {
-    return NextResponse.next();
-  } catch (err) {
-    const res = NextResponse.next();
-    res.headers.set(
-      'x-middleware-error',
-      err instanceof Error ? err.message : String(err)
-    );
-    return res;
-  }
+export default function middleware(req: NextRequest) {
+  return NextResponse.next({
+    headers: {
+      'Referrer-Policy': 'origin-when-cross-origin',
+      'X-Frame-Options': 'DENY',
+      'X-Content-Type-Options': 'nosniff',
+      'X-DNS-Prefetch-Control': 'on',
+      'Strict-Transport-Security':
+        'max-age=31536000; includeSubDomains; preload',
+    },
+  });
 }
