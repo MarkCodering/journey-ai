@@ -1,71 +1,330 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Journey Planner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
-  <style>
-    :root{--panel:#fff;--border:#e5e7eb;--text:#0f172a;--muted:#64748b;--shadow:0 8px 22px rgba(2,8,23,.06);--radius:14px}
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;background:linear-gradient(#f9fafb,#ffffff);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial}
-    .container{max-width:1200px;margin:0 auto}
-    header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.9);backdrop-filter:saturate(180%) blur(6px);border-bottom:1px solid var(--border)}
-    header .inner{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
-    .brand{display:flex;gap:8px;align-items:center;font-weight:700}
-    .muted{color:var(--muted);font-size:12px}
-    main{padding:22px 20px 28px}
-    .grid{display:grid;grid-template-columns:360px 1fr;gap:22px}
-    @media(max-width:1000px){.grid{grid-template-columns:1fr}}
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-    .card .header{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:700}
-    .card .content{padding:16px}
-    .col{display:flex;flex-direction:column;gap:8px}
-    .row{display:flex;gap:12px;align-items:center}
-    label{font-size:13px;color:var(--muted)}
-    textarea{width:100%;min-height:110px;resize:vertical;padding:10px 12px;border-radius:12px;border:1px solid var(--border);outline:0;font:inherit;background:#fff}
-    .btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;height:38px;padding:0 14px;border-radius:12px;border:1px solid transparent;font-weight:600;cursor:pointer;user-select:none;transition:.15s}
-    .btn:disabled{opacity:.6;cursor:not-allowed}
-    .btn.primary{background:#111827;color:#fff}.btn.primary:hover{filter:brightness(.95)}
-    .btn.secondary{background:#f3f4f6;color:#0f172a;border-color:#e5e7eb}.btn.secondary:hover{background:#eaecef}
-    .btn.ghost{background:transparent;border:1px solid var(--border)}
-    .btn.destructive{background:#ef4444;color:#fff}
-    .switch{position:relative;width:44px;height:26px;border-radius:999px;background:#d1d5db;transition:.2s;border:1px solid #cfd3da;cursor:pointer}
-    .switch[data-on="true"]{background:#111827;border-color:#111827}
-    .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:.2s}
-    .switch[data-on="true"] .knob{transform:translateX(18px)}
-    .list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;padding-right:6px}
-    .chip{width:28px;height:28px;border:1px solid var(--border);border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:12px;color:#0f172a}
-    .item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:#fff}
-    .item .meta{min-width:0}.item .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .item .sub{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .iconbtn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:#fafafa;cursor:pointer}
-    .iconbtn:hover{background:#f0f0f2}
-    .map-wrap{position:relative} #map{width:100%;height:76vh}
-    .map-attrib{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:6px 10px;font-size:11px;color:#475569;background:rgba(255,255,255,.85);backdrop-filter:blur(4px);border-top:1px solid var(--border)}
-    .note{font-size:12px;color:#64748b}.error{color:#b91c1c;font-size:13px}.warn{color:#b45309;font-size:13px}.sticky-side{position:sticky;top:84px}
-  </style>
-</head>
-<body>
-  <header>
-    <div class="inner container">
-      <div class="brand">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 3v18"/></svg>
-        Journey Planner
+  <head>
+    <meta charset="utf-8" />
+    <title>Journey Planner – Standalone (AI with Backoff)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --panel: #fff;
+        --border: #e5e7eb;
+        --text: #0f172a;
+        --muted: #64748b;
+        --shadow: 0 8px 22px rgba(2, 8, 23, 0.06);
+        --radius: 14px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(#f9fafb, #ffffff);
+        color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
+          "Helvetica Neue", Arial;
+      }
+      .container {
+        max-width: 3000px;
+        margin: 0 auto;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: saturate(180%) blur(6px);
+        border-bottom: 1px solid var(--border);
+      }
+      header .inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 20px;
+      }
+      .brand {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-weight: 700;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      main {
+        padding: 22px 20px 28px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 360px 1fr;
+        gap: 22px;
+      }
+      @media (max-width: 1000px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        min-height: 1200px;
+      }
+      .card .header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 700;
+      }
+      .card .content {
+        padding: 16px;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      label {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      textarea,
+      input,
+      select {
+        font: inherit;
+      }
+      textarea {
+        width: 100%;
+        min-height: 110px;
+        resize: vertical;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        outline: 0;
+        background: #fff;
+      }
+      input[type="text"],
+      input[type="password"],
+      select {
+        height: 38px;
+        padding: 0 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        outline: 0;
+        background: #fff;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: center;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+        transition: 0.15s;
+      }
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .btn.primary {
+        background: #111827;
+        color: #fff;
+      }
+      .btn.primary:hover {
+        filter: brightness(0.95);
+      }
+      .btn.secondary {
+        background: #f3f4f6;
+        color: #0f172a;
+        border-color: #e5e7eb;
+      }
+      .btn.secondary:hover {
+        background: #eaecef;
+      }
+      .btn.ghost {
+        background: transparent;
+        border: 1px solid var(--border);
+      }
+      .btn.destructive {
+        background: #ef4444;
+        color: #fff;
+      }
+      .switch {
+        position: relative;
+        width: 44px;
+        height: 26px;
+        border-radius: 999px;
+        background: #d1d5db;
+        transition: 0.2s;
+        border: 1px solid #cfd3da;
+        cursor: pointer;
+      }
+      .switch[data-on="true"] {
+        background: #111827;
+        border-color: #111827;
+      }
+      .knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        transition: 0.2s;
+      }
+      .switch[data-on="true"] .knob {
+        transform: translateX(18px);
+      }
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 260px;
+        overflow: auto;
+        padding-right: 6px;
+      }
+      .chip {
+        width: 28px;
+        height: 28px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 12px;
+        color: #0f172a;
+      }
+      .item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: #fff;
+      }
+      .item .meta {
+        min-width: 0;
+      }
+      .item .title {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .item .sub {
+        font-size: 12px;
+        color: #64748b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .iconbtn {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: #fafafa;
+        cursor: pointer;
+      }
+      .iconbtn:hover {
+        background: #f0f0f2;
+      }
+      .map-wrap {
+        position: relative;
+      }
+      #map {
+        width: 100%;
+        height: 76vh;
+      }
+      .map-attrib {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2;
+        padding: 6px 10px;
+        font-size: 11px;
+        color: #475569;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(4px);
+        border-top: 1px solid var(--border);
+      }
+      .note {
+        font-size: 12px;
+        color: #64748b;
+      }
+      .error {
+        color: #b91c1c;
+        font-size: 13px;
+      }
+      .warn {
+        color: #b45309;
+        font-size: 13px;
+      }
+      .sticky-side {
+        position: sticky;
+        top: 84px;
+      }
+      .small {
+        font-size: 12px;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="inner container">
+        <div class="brand">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <path d="M3 12h18M12 3v18" />
+          </svg>
+          Journey Planner
+        </div>
+        <div class="muted">AI lookup with backoff → 3D fly-through</div>
       </div>
-      <div class="muted">Click map to add points · Reorder with arrows</div>
-    </div>
-  </header>
+    </header>
 
-  <main class="container">
-    <div class="grid">
-      <div class="sticky-side">
-        <div class="card">
-          <div class="header">Plan</div>
-          <div class="content">
-            <div class="col">
-              <label for="prompt">Trip prompt (optional)</label>
-              <textarea id="prompt" placeholder="Paste your plan here…">London – Sept 20–22
+    <main class="container">
+      <div class="grid">
+        <div class="sticky-side">
+          <div class="card">
+            <div class="header">Plan</div>
+            <div class="content">
+              <div class="col">
+                <label for="prompt">Trip prompt</label>
+                <textarea id="prompt" placeholder="Paste your plan…">
+London – Sept 20–22
 Totally Thames Festival – Along the Thames River, London, UK
 Great River Race Finish & Music – Richmond Riverside, Whittaker Ave, Richmond TW9 1TP, UK
 London Design Festival – Victoria and Albert Museum, Cromwell Rd, London SW7 2RL, UK
@@ -81,343 +340,758 @@ Ceilidh Club / Local Music – Cambridge Junction, Clifton Way, Cambridge CB1 7G
 Music in the Parks – Jesus Green Park, Cambridge CB4 3AN, UK
 Punting on the River Cam – Mill Ln, Cambridge CB2 1RX, UK
 King’s College Chapel – King’s Parade, Cambridge CB2 1ST, UK
-Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
-            </div>
+Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea
+                >
+              </div>
 
-            <div class="col" style="margin-top:14px">
-              <label for="scenes">Scenes / Stops (one per line). Address or “lat,lon”.</label>
-              <textarea id="scenes" class="resize-none" placeholder="(Optional) Extra stops, one per line…"></textarea>
+              <div class="col">
+                <label>Optional extra stops (one per line, or "lat,lon")</label>
+                <textarea
+                  id="scenes"
+                  placeholder="e.g. 51.5033,-0.1195"
+                ></textarea>
+              </div>
 
-              <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
-                <button id="addLine" class="btn secondary">➕ Add line</button>
-                <button id="parse" class="btn ghost">🧠 Parse from prompt</button>
+              <div class="row">
+                <div class="col" style="flex: 1; min-width: 220px">
+                  <label for="geminiKey"
+                    >Gemini API key (client-side, referrer-restricted)</label
+                  >
+                  <input id="geminiKey" type="password" placeholder="AIza..." />
+                </div>
+                <div class="col" style="width: 190px">
+                  <label for="model">Model</label>
+                  <select id="model">
+                    <option value="gemini-1.5-flash-8b">
+                      gemini-1.5-flash-8b (lower 429)
+                    </option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top: 12px">
                 <button id="plot" class="btn primary">🗺️ Plot route</button>
                 <button id="clear" class="btn destructive">🗑️ Clear</button>
-              </div>
-
-              <div id="err" class="error" style="display:none;margin-top:6px;"></div>
-              <div id="tileWarn" class="warn" style="display:none;margin-top:6px;"></div>
-              <div class="note" style="margin-top:6px">Tip: You can click the map to add waypoints too.</div>
-            </div>
-
-            <div style="margin-top:16px;border:1px solid var(--border);border-radius:12px;padding:10px">
-              <div class="row" style="justify-content:space-between;margin-bottom:4px">
-                <div class="row" style="gap:10px">
-                  <div id="terrainSwitch" class="switch" role="switch" aria-checked="true" data-on="true" tabindex="0"><div class="knob"></div></div>
+                <div class="row" style="margin-left: auto">
+                  <div
+                    id="terrainSwitch"
+                    class="switch"
+                    role="switch"
+                    aria-checked="true"
+                    data-on="true"
+                    tabindex="0"
+                  >
+                    <div class="knob"></div>
+                  </div>
                   <label>3D terrain</label>
+                  <button id="tilt" class="btn ghost" title="Tilt map">
+                    ⬈ Tilt
+                  </button>
                 </div>
-                <button id="tilt" class="btn ghost" title="Tilt map">⬈ Tilt</button>
+              </div>
+
+              <div
+                id="err"
+                class="error"
+                style="display: none; margin-top: 6px"
+              ></div>
+              <div
+                id="tileWarn"
+                class="warn"
+                style="display: none; margin-top: 6px"
+              ></div>
+
+              <div class="col" style="margin-top: 14px">
+                <label>Route order</label>
+                <div id="list" class="list"></div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <div class="col" style="margin-top:14px">
-              <label>Route order</label>
-              <div id="list" class="list"></div>
+        <div class="card">
+          <div class="header">3D Map View</div>
+          <div class="content" style="padding: 0">
+            <div class="map-wrap">
+              <div id="map"></div>
+              <div class="map-attrib">
+                Tiles © OpenStreetMap · Terrain © Mapzen (Terrarium) ·
+                Geocoding: Gemini or OSM
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </main>
 
-      <div class="card">
-        <div class="header">3D Map View</div>
-        <div class="content" style="padding:0">
-          <div class="map-wrap">
-            <div id="map"></div>
-            <div class="map-attrib">Geocoding by OSM Nominatim (rate-limited, throttled). Tiles © OpenStreetMap; Terrain © Mapzen (Terrarium).</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
-
-  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
-  <script>
-    // ---------- Helpers ----------
-    function toFC(points){ return { type:"FeatureCollection", features: points.map((p,i)=>({ type:"Feature", properties:{ name:p.name, order:i+1 }, geometry:{ type:"Point", coordinates:[p.lon,p.lat] } })) }; }
-    function toLine(points){ if(points.length<2) return null; return { type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates: points.map(p=>[p.lon,p.lat]) } }; }
-    function osmRaster(){ return { version:8, sources:{ osm:{ type:"raster", tiles:["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png","https://b.tile.openstreetmap.org/{z}/{x}/{y}.png","https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize:256, maxzoom:19, attribution:"© OpenStreetMap contributors" } }, layers:[{id:"osm",type:"raster",source:"osm"}] }; }
-
-    // ---------- City bias + aliases + OFFLINE COORDS for your prompt ----------
-    const CITY_BBOX = {
-      London:    { left:-0.51, top:51.70, right:0.33, bottom:51.28 },
-      Cambridge: { left: 0.06, top:52.24, right:0.20, bottom:52.17 },
-    };
-    const CITY_CENTER = {
-      London:    { lat:51.5074, lon:-0.1278 },
-      Cambridge: { lat:52.2053, lon:0.1218 },
-    };
-
-    // Exact labels from your prompt → coordinates (approx, good enough to plot)
-    const PRESET = new Map([
-      // LONDON
-      ["Totally Thames Festival – Along the Thames River, London, UK",              {lat:51.5079, lon:-0.0877}],
-      ["Great River Race Finish & Music – Richmond Riverside, Whittaker Ave, Richmond TW9 1TP, UK", {lat:51.4616, lon:-0.3050}],
-      ["London Design Festival – Victoria and Albert Museum, Cromwell Rd, London SW7 2RL, UK",      {lat:51.49664, lon:-0.17218}],
-      ["London Fashion Week Public Events – The Store Studios, 180 Strand, London WC2R 1EA, UK",    {lat:51.51150, lon:-0.11610}],
-      ["Open House London – Various locations (e.g., City Hall, Kamal Chunchie Way, London E16 1ZE, UK)", {lat:51.5079, lon:0.0176}],
-      ["West End Theatre (Tina Turner Musical) – Aldwych Theatre, 49 Aldwych, London WC2B 4DF, UK", {lat:51.51376, lon:-0.11881}],
-      ["Southbank Riverside Walk – Queen’s Walk, South Bank, London SE1 8XX, UK",                   {lat:51.5055, lon:-0.1160}],
-
-      // CAMBRIDGE
-      ["Cambridge Tech Week / Local Talks – Various venues, Cambridge CB2, UK",                     {lat:52.2053, lon:0.1218}],
-      ["Cambridge Market Square – Market Hill, Cambridge CB2 3NJ, UK",                              {lat:52.2056, lon:0.1190}],
-      ["Ceilidh Club / Local Music – Cambridge Junction, Clifton Way, Cambridge CB1 7GX, UK",       {lat:52.1946, lon:0.1377}],
-      ["Music in the Parks – Jesus Green Park, Cambridge CB4 3AN, UK",                              {lat:52.2103, lon:0.1199}],
-      ["Punting on the River Cam – Mill Ln, Cambridge CB2 1RX, UK",                                 {lat:52.2015, lon:0.1163}],
-      ["King’s College Chapel – King’s Parade, Cambridge CB2 1ST, UK",                              {lat:52.2049, lon:0.1166}],
-      ["Trinity College – Trinity St, Cambridge CB2 1TQ, UK",                                       {lat:52.2060, lon:0.1166}],
-    ]);
-
-    // Minor aliases to improve lookup/geocoding if text varies slightly
-    const ADDRESS_ALIASES = [
-      { test:/tina\s*turner/i, city:"London", query:"Aldwych Theatre, 49 Aldwych, London WC2B 4DF, UK" },
-      { test:/totally\s*thames/i, city:"London", query:"River Thames, London, UK" },
-    ];
-
-    function parsePromptItems(text){
-      const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-      const items = [];
-      let currentCity = null;
-      const headerRe = /^\s*([A-Za-z][A-Za-z\s]+)\s*[–-]\s*([A-Za-z]{3,}|[A-Za-z]+)\b/i;
-
-      for (const line of lines){
-        const h = line.match(headerRe);
-        if (h && !/,/.test(line)) {
-          const cityRaw = h[1].trim();
-          currentCity = /cambridge/i.test(cityRaw) ? "Cambridge" : /london/i.test(cityRaw) ? "London" : cityRaw;
-          continue;
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script>
+      /* ================= Map helpers ================= */
+      function osmRaster() {
+        return {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: [
+                "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              ],
+              tileSize: 256,
+              maxzoom: 19,
+              attribution: "© OpenStreetMap contributors",
+            },
+          },
+          layers: [{ id: "osm", type: "raster", source: "osm" }],
+        };
+      }
+      function toFC(points) {
+        return {
+          type: "FeatureCollection",
+          features: points.map((p, i) => ({
+            type: "Feature",
+            properties: { name: p.name, order: i + 1 },
+            geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+          })),
+        };
+      }
+      function toLine(points) {
+        if (points.length < 2) return null;
+        return {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: points.map((p) => [p.lon, p.lat]),
+          },
+        };
+      }
+      function bearing(lon1, lat1, lon2, lat2) {
+        const R = (d) => (d * Math.PI) / 180,
+          D = (r) => (r * 180) / Math.PI,
+          φ1 = R(lat1),
+          φ2 = R(lat2),
+          Δλ = R(lon2 - lon1);
+        const y = Math.sin(Δλ) * Math.cos(φ2),
+          x =
+            Math.cos(φ1) * Math.cos(φ2) +
+            Math.sin(φ1) * Math.sin(φ2) * Math.cos(Δλ);
+        return (D(Math.atan2(y, x)) + 360) % 360;
+      }
+      async function flyRoute(map, pts, { pitch3d = true } = {}) {
+        if (pts.length < 2) return;
+        if (!map.getSource("route-anim")) {
+          map.addSource("route-anim", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          });
+          map.addLayer({
+            id: "route-anim-layer",
+            type: "line",
+            source: "route-anim",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#10b981",
+              "line-width": 5,
+              "line-opacity": 0.95,
+            },
+          });
         }
-        const paren = line.match(/\(([^)]+)\)/);
-        let addressPart = paren ? paren[1] : line;
-        const segs = addressPart.split(/—|–|-/);
-        if (segs.length >= 2) addressPart = segs[segs.length - 1];
-        addressPart = addressPart.replace(/^\s*e\.?g\.?,?\s*/i, "").trim();
-        items.push({ label: line, address: addressPart, city: currentCity });
-      }
-      return items;
-    }
-
-    function normalizeAddress(addr, city){
-      let a = addr;
-      a = a.replace(/\bAlong the\b/i, "").trim();
-      a = a.replace(/\bVarious locations?:?/i, "").trim();
-      a = a.replace(/\bThames River\b/i, "River Thames");
-      a = a.replace(/\s{2,}/g, " ").replace(/^[,•-]+/, "").replace(/[,•-]+$/, "").trim();
-      if (city && !new RegExp("\\b"+city+"\\b","i").test(a)) {
-        a = a.replace(/,\s*UK$/i, "");
-        a = a ? `${a}, ${city}` : city;
-      }
-      return a;
-    }
-
-    async function geocodeNominatim(q, bias){
-      const params = new URLSearchParams({ format:"json", q, countrycodes:"gb", limit:"1", addressdetails:"0" });
-      if (bias) {
-        params.set("viewbox", `${bias.left},${bias.top},${bias.right},${bias.bottom}`);
-        params.set("bounded", "1");
-      }
-      const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-      const res = await fetch(url, { headers:{ "Accept-Language":"en" } });
-      if (!res.ok) return null;
-      const data = await res.json();
-      if (data && data.length){
-        const f = data[0];
-        return { lat:parseFloat(f.lat), lon:parseFloat(f.lon) };
-      }
-      return null;
-    }
-
-    async function geocodeRobust(raw, city, label){
-      // offline preset by exact label first
-      if (PRESET.has(label)) return PRESET.get(label);
-
-      // alias mapping by label next
-      const alias = ADDRESS_ALIASES.find(a => a.test.test(label || raw) && (!a.city || a.city===city));
-      const base = normalizeAddress(alias ? alias.query : raw, city);
-      const bias = city && CITY_BBOX[city] ? CITY_BBOX[city] : null;
-
-      // try base
-      let hit = await geocodeNominatim(base, bias);
-      if (hit) return hit;
-
-      // try without leading article
-      hit = await geocodeNominatim(base.replace(/^\b(The|A|An)\b\s+/i, "").trim(), bias);
-      if (hit) return hit;
-
-      // last resort: city center (so you still get a node)
-      if (city && CITY_CENTER[city]) return CITY_CENTER[city];
-
-      return null;
-    }
-
-    // ---------- 3D animation ----------
-    function bearing(lon1, lat1, lon2, lat2){
-      const R=(d)=>d*Math.PI/180, D=(r)=>r*180/Math.PI;
-      const φ1=R(lat1), φ2=R(lat2), Δλ=R(lon2-lon1);
-      const y=Math.sin(Δλ)*Math.cos(φ2);
-      const x=Math.cos(φ1)*Math.cos(φ2)+Math.sin(φ1)*Math.sin(φ2)*Math.cos(Δλ);
-      return (D(Math.atan2(y,x))+360)%360;
-    }
-    async function flyRoute(map, pts, { pitch3d=true } = {}){
-      if (pts.length < 2) return;
-      const full = { type:"FeatureCollection", features:[{ type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates: pts.map(p=>[p.lon,p.lat]) } }] };
-      map.getSource("route-line")?.setData(full);
-
-      if (!map.getSource("route-anim")) {
-        map.addSource("route-anim", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
-        map.addLayer({ id:"route-anim-layer", type:"line", source:"route-anim",
-          layout:{ "line-join":"round","line-cap":"round" },
-          paint:{ "line-color":"#10b981","line-width":5,"line-opacity":0.95 } });
-      }
-      let coords=[[pts[0].lon, pts[0].lat]];
-      map.getSource("route-anim").setData({ type:"FeatureCollection", features:[{ type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates:coords } }] });
-      map.easeTo({ center:coords[0], zoom:13, pitch: pitch3d?55:0, bearing:0, duration:600 });
-
-      for (let i=1;i<pts.length;i++){
-        const a=pts[i-1], b=pts[i];
-        coords.push([b.lon,b.lat]);
-        map.getSource("route-anim").setData({ type:"FeatureCollection", features:[{ type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates:coords } }] });
-        await new Promise(r=>{
-          map.easeTo({ center:[b.lon,b.lat], bearing:bearing(a.lon,a.lat,b.lon,b.lat), pitch: pitch3d?55:0, zoom:14, duration:1100, easing:t=>t });
-          setTimeout(r,1150);
+        let coords = [[pts[0].lon, pts[0].lat]];
+        map
+          .getSource("route-anim")
+          .setData({
+            type: "FeatureCollection",
+            features: [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates: coords },
+              },
+            ],
+          });
+        map.easeTo({
+          center: coords[0],
+          zoom: 13,
+          pitch: pitch3d ? 55 : 0,
+          bearing: 0,
+          duration: 600,
         });
+
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1],
+            b = pts[i];
+          coords.push([b.lon, b.lat]);
+          map
+            .getSource("route-anim")
+            .setData({
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  properties: {},
+                  geometry: { type: "LineString", coordinates: coords },
+                },
+              ],
+            });
+          await new Promise((r) => {
+            map.easeTo({
+              center: [b.lon, b.lat],
+              bearing: bearing(a.lon, a.lat, b.lon, b.lat),
+              pitch: pitch3d ? 55 : 0,
+              zoom: 14,
+              duration: 1100,
+              easing: (t) => t,
+              essential: true,
+            });
+            setTimeout(r, 1150);
+          });
+        }
+        const B = new maplibregl.LngLatBounds();
+        pts.forEach((p) => B.extend([p.lon, p.lat]));
+        map.fitBounds(B, { padding: 80, duration: 900 });
       }
-      const B=new maplibregl.LngLatBounds(); pts.forEach(p=>B.extend([p.lon,p.lat]));
-      map.fitBounds(B,{ padding:80, duration:900 });
-    }
 
-    // ---------- State & elements ----------
-    let waypoints = [];
-    let is3D = true;
-    let mapReady = false;
+      /* ================= Parsing + OSM fallback ================= */
+      const CITY_BBOX = {
+        London: { left: -0.51, top: 51.7, right: 0.33, bottom: 51.28 },
+        Cambridge: { left: 0.06, top: 52.24, right: 0.2, bottom: 52.17 },
+      };
+      const CITY_CENTER = {
+        London: { lat: 51.5074, lon: -0.1278 },
+        Cambridge: { lat: 52.2053, lon: 0.1218 },
+      };
 
-    const promptEl = document.getElementById("prompt");
-    const scenesEl = document.getElementById("scenes");
-    const addLineBtn = document.getElementById("addLine");
-    const parseBtn = document.getElementById("parse");
-    const plotBtn = document.getElementById("plot");
-    const clearBtn = document.getElementById("clear");
-    const listEl = document.getElementById("list");
-    const errEl = document.getElementById("err");
-    const tileWarnEl = document.getElementById("tileWarn");
-    const terrainSwitch = document.getElementById("terrainSwitch");
-    const tiltBtn = document.getElementById("tilt");
-
-    // ---------- Map (default London) ----------
-    const map = new maplibregl.Map({
-      container:"map",
-      style: osmRaster(),
-      center:[-0.1278, 51.5074],
-      zoom: 11, pitch: 55, bearing: -16, antialias: true
-    });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), "top-right");
-    map.on("error", (e)=>{ const msg=(e && (e.error && e.error.message))||""; if(/AJAXError|403|Failed|Network/i.test(msg)){ tileWarnEl.style.display="block"; tileWarnEl.textContent="Map tiles failed to load. Try again later or use your own provider/API key."; } });
-
-    function ensureSources(){
-      if (!map.getSource("route-points")) map.addSource("route-points",{ type:"geojson", data: toFC([]) });
-      if (!map.getSource("route-line"))   map.addSource("route-line",  { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
-      if (!map.getLayer("route-line-layer")) map.addLayer({ id:"route-line-layer", type:"line", source:"route-line", layout:{ "line-join":"round","line-cap":"round" }, paint:{ "line-color":"#ff2d55","line-width":6,"line-opacity":1 } });
-      if (!map.getLayer("route-dot-layer"))  map.addLayer({ id:"route-dot-layer",  type:"circle", source:"route-points", paint:{ "circle-radius":8,"circle-color":"#111827","circle-stroke-color":"#fff","circle-stroke-width":2 } });
-      if (!map.getLayer("route-number-layer")) map.addLayer({ id:"route-number-layer", type:"symbol", source:"route-points", layout:{ "text-field":["to-string",["get","order"]], "text-size":12, "text-offset":[0,1.05], "text-anchor":"top" }, paint:{ "text-color":"#111827","text-halo-width":1,"text-halo-color":"#ffffff" } });
-      if (!map.getSource("terrain")) { try{ map.addSource("terrain",{ type:"raster-dem", tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], tileSize:256, maxzoom:15, encoding:"terrarium" }); map.setTerrain({ source:"terrain", exaggeration:1.4 }); if(!map.getLayer("sky")) map.addLayer({ id:"sky", type:"sky", paint:{ "sky-type":"atmosphere","sky-atmosphere-sun":[0,0],"sky-atmosphere-sun-intensity":12 } }); }catch(_){} }
-    }
-    map.on("load", ()=>{ ensureSources(); mapReady=true; map.on("click",(e)=>{ const {lngLat}=e; waypoints=[...waypoints,{ id:crypto.randomUUID(), name:`Point ${waypoints.length+1}`, lat:lngLat.lat, lon:lngLat.lng }]; sync(); }); });
-
-    // ---------- UI ----------
-    addLineBtn.addEventListener("click", ()=>{ scenesEl.value = (scenesEl.value ? scenesEl.value + "\n" : ""); scenesEl.focus(); });
-    parseBtn.addEventListener("click", ()=>{ const items=parsePromptItems(promptEl.value); const addrs=items.map(it=>it.address); if(addrs.length){ const ex=scenesEl.value.trim(); scenesEl.value=(ex?ex+"\n":"")+addrs.join("\n"); } });
-    clearBtn.addEventListener("click", ()=>{ waypoints=[]; errEl.style.display="none"; sync(); });
-    terrainSwitch.addEventListener("click", ()=>{ const on=terrainSwitch.getAttribute("data-on")==="true"; terrainSwitch.setAttribute("data-on", String(!on)); is3D=!on; applyTerrain(); });
-    terrainSwitch.addEventListener("keydown", (e)=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); terrainSwitch.click(); } });
-    tiltBtn.addEventListener("click", ()=>{ const target = map.getPitch()>5 ? 0 : 55; map.easeTo({ pitch:target, duration:450 }); });
-
-    // Throttle geocoding (Nominatim policy) — ~1 request / 1100ms
-    const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
-
-    plotBtn.addEventListener("click", async ()=>{
-      errEl.style.display="none";
-      try{
-        if(!mapReady) await new Promise(r=>map.once("load",r));
-        ensureSources();
-
-        const parsed = parsePromptItems(promptEl.value);         // city-aware items from prompt
-        const extras = scenesEl.value.split(/\n|,/).map(s=>s.trim()).filter(Boolean).map(a=>({ label:a, address:a, city:null }));
-        const lines  = [...parsed, ...extras];
-
-        const results = [];
-        for (let i=0;i<lines.length;i++){
-          const entry = lines[i];
-          // if user wrote a lat,lon directly
-          const m = entry.address.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
-          if (m){
-            results.push({ id:crypto.randomUUID(), name:entry.label, lat:parseFloat(m[1]), lon:parseFloat(m[2]) });
+      function parsePromptItems(text) {
+        const lines = text
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const items = [];
+        let currentCity = null;
+        const headerRe =
+          /^\s*([A-Za-z][A-Za-z\s]+)\s*[–-]\s*([A-Za-z]{3,}|[A-Za-z]+)\b/i;
+        for (const line of lines) {
+          const h = line.match(headerRe);
+          if (h && !/,/.test(line)) {
+            const cityRaw = h[1].trim();
+            currentCity = /cambridge/i.test(cityRaw)
+              ? "Cambridge"
+              : /london/i.test(cityRaw)
+              ? "London"
+              : cityRaw;
             continue;
           }
-          // offline/preset or geocode
-          let hit = await geocodeRobust(entry.address, entry.city, entry.label);
-          if (!hit) throw new Error("No match for: "+entry.address);
-          results.push({ id:crypto.randomUUID(), name:entry.label, lat:hit.lat, lon:hit.lon });
-
-          // throttle only when we actually called the API (heuristic)
-          if (!PRESET.has(entry.label)) await sleep(1100);
+          const paren = line.match(/\(([^)]+)\)/);
+          let addressPart = paren ? paren[1] : line;
+          const segs = addressPart.split(/—|–|-/);
+          if (segs.length >= 2) addressPart = segs[segs.length - 1];
+          addressPart = addressPart.replace(/^\s*e\.?g\.?,?\s*/i, "").trim();
+          items.push({ label: line, address: addressPart, city: currentCity });
         }
-
-        waypoints = results;
-        sync();
-        await flyRoute(map, waypoints, { pitch3d:is3D });
-
-      }catch(ex){
-        errEl.textContent = ex?.message || "Failed to plot route.";
-        errEl.style.display="block";
+        return items;
       }
-    });
-
-    // ---------- sync ----------
-    function sync(){
-      if(!mapReady) return;
-      ensureSources();
-      const points = toFC(waypoints);
-      const line = toLine(waypoints);
-      map.getSource("route-points")?.setData(points);
-      map.getSource("route-line")?.setData(line ? { type:"FeatureCollection", features:[line] } : { type:"FeatureCollection", features:[] });
-
-      renderList();
-      if(waypoints.length){
-        const b=new maplibregl.LngLatBounds(); waypoints.forEach(p=>b.extend([p.lon,p.lat]));
-        map.fitBounds(b,{ padding:80, duration:700 });
+      function normalizeAddress(addr, city) {
+        let a = addr;
+        a = a.replace(/\bAlong the\b/i, "").trim();
+        a = a.replace(/\bVarious locations?:?/i, "").trim();
+        a = a.replace(/\bThames River\b/i, "River Thames");
+        a = a
+          .replace(/\s{2,}/g, " ")
+          .replace(/^[,•-]+/, "")
+          .replace(/[,•-]+$/, "")
+          .trim();
+        if (city && !new RegExp("\\b" + city + "\\b", "i").test(a)) {
+          a = a.replace(/,\s*UK$/i, "");
+          a = a ? `${a}, ${city}` : city;
+        }
+        return a;
       }
-    }
+      async function geocodeOSM(raw, city) {
+        const q = normalizeAddress(raw, city);
+        const bias = city && CITY_BBOX[city] ? CITY_BBOX[city] : null;
+        const params = new URLSearchParams({
+          format: "json",
+          q,
+          countrycodes: "gb",
+          limit: "1",
+          addressdetails: "0",
+        });
+        if (bias) {
+          params.set(
+            "viewbox",
+            `${bias.left},${bias.top},${bias.right},${bias.bottom}`
+          );
+          params.set("bounded", "1");
+        }
+        const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+        const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && data.length)
+          return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+        if (city && CITY_CENTER[city]) return CITY_CENTER[city];
+        return null;
+      }
 
-    function applyTerrain(){
-      try{
-        ensureSources();
-        if(is3D){ if(map.getSource("terrain")) map.setTerrain({ source:"terrain", exaggeration:1.4 }); map.setPitch(55); }
-        else { map.setTerrain(undefined); map.setPitch(0); }
-      }catch(_){}
-    }
+      /* ================= Gemini with backoff + chunking ================= */
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      function parseRetryAfter(h) {
+        if (!h) return null;
+        const n = Number(h);
+        if (!Number.isNaN(n) && n > 0) return n * 1000;
+        return null;
+      }
+      function splitIntoChunksByCity(text) {
+        const lines = text.split(/\r?\n/);
+        const chunks = [];
+        let cur = [];
+        const headerRe =
+          /^\s*([A-Za-z][A-Za-z\s]+)\s*[–-]\s*([A-Za-z]{3,}|[A-Za-z]+)\b/;
+        for (const line of lines) {
+          if (!line.trim()) {
+            if (cur.length) {
+              chunks.push(cur.join("\n"));
+              cur = [];
+            }
+            continue;
+          }
+          if (headerRe.test(line) && cur.length) {
+            chunks.push(cur.join("\n"));
+            cur = [line];
+          } else cur.push(line);
+        }
+        if (cur.length) chunks.push(cur.join("\n"));
+        return chunks.filter((c) => c.trim().length > 0);
+      }
+      async function aiCallOnce(
+        prompt,
+        apiKey,
+        model,
+        { maxRetries = 4, baseDelay = 1200 } = {}
+      ) {
+        const sys = `You extract trip stops from user text. Use Google Search grounding to disambiguate each stop and return precise WGS84 coordinates.
+Return ONLY minified JSON:
+{"items":[{"label":"","address":"","lat":0,"lon":0,"city":"","country":"","confidence":0.0}]}
+Rules: preserve order; pick the most relevant spot for events/areas; give entrance-level coords when possible; confidence in [0,1]; omit unknowns.`;
 
-    function renderList(){
-      const list=document.getElementById("list"); list.innerHTML="";
-      if(!waypoints.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="No waypoints yet."; list.appendChild(p); return; }
-      waypoints.forEach((w,i)=>{
-        const row=document.createElement("div"); row.className="item";
-        const left=document.createElement("div"); left.className="row";
-        const chip=document.createElement("div"); chip.className="chip"; chip.textContent=String(i+1);
-        const meta=document.createElement("div"); meta.className="meta";
-        const t=document.createElement("div"); t.className="title"; t.textContent=w.name;
-        const s=document.createElement("div"); s.className="sub"; s.textContent=`${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}`;
-        meta.appendChild(t); meta.appendChild(s); left.appendChild(chip); left.appendChild(meta);
-        const right=document.createElement("div"); right.className="row";
-        const up=document.createElement("button"); up.className="iconbtn"; up.textContent="↑";
-        const down=document.createElement("button"); down.className="iconbtn"; down.textContent="↓";
-        const del=document.createElement("button"); del.className="iconbtn"; del.textContent="✕";
-        up.addEventListener("click",()=>moveItem(i,-1)); down.addEventListener("click",()=>moveItem(i,1)); del.addEventListener("click",()=>removeItem(i));
-        right.appendChild(up); right.appendChild(down); right.appendChild(del);
-        row.appendChild(left); row.appendChild(right); list.appendChild(row);
+        const body = {
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${sys}\nUSER_PROMPT:\n${prompt}\nJSON:` }],
+            },
+          ],
+          tools: [{ google_search_retrieval: {} }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 2048,
+            responseMimeType: "application/json",
+          },
+        };
+
+        let attempt = 0;
+        while (true) {
+          const resp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+              model
+            )}:generateContent?key=${encodeURIComponent(apiKey)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            }
+          );
+
+          if (resp.ok) {
+            const data = await resp.json();
+            let text = "";
+            if (data.candidates?.[0]?.content?.parts?.[0]?.text)
+              text = data.candidates[0].content.parts[0].text;
+            else if (data.candidates?.[0]?.content?.parts)
+              text = data.candidates[0].content.parts
+                .map((p) => p.text || "")
+                .join("");
+            else if (data?.output_text) text = data.output_text;
+
+            let parsed;
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              const s = text.indexOf("{"),
+                e = text.lastIndexOf("}");
+              if (s >= 0 && e > s) parsed = JSON.parse(text.slice(s, e + 1));
+            }
+            if (!parsed || !parsed.items)
+              throw new Error("AI returned unexpected format.");
+
+            const seen = new Set();
+            return parsed.items
+              .filter(
+                (it) => typeof it.lat === "number" && typeof it.lon === "number"
+              )
+              .filter((it) => {
+                const k = `${it.lat.toFixed(6)},${it.lon.toFixed(6)}`;
+                if (seen.has(k)) return false;
+                seen.add(k);
+                return true;
+              })
+              .map((it, i) => ({
+                id: crypto.randomUUID(),
+                name: it.label || it.address || `Stop ${i + 1}`,
+                lat: it.lat,
+                lon: it.lon,
+              }));
+          }
+
+          if (resp.status === 429 || resp.status === 503) {
+            if (attempt >= maxRetries) {
+              const msg = await resp.text().catch(() => "");
+              throw new Error(
+                `Gemini ${resp.status} after ${attempt} retries. ${
+                  msg || ""
+                }`.trim()
+              );
+            }
+            const ra = parseRetryAfter(resp.headers.get("Retry-After"));
+            const delay = ra ?? Math.round(baseDelay * Math.pow(2, attempt));
+            attempt++;
+            await sleep(delay);
+            continue;
+          }
+
+          const msg = await resp.text().catch(() => "");
+          throw new Error(`Gemini error ${resp.status}: ${msg}`);
+        }
+      }
+      async function aiParsePromptInChunks(fullPrompt, apiKey, model) {
+        const chunks = splitIntoChunksByCity(fullPrompt);
+        const all = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const items = await aiCallOnce(chunks[i], apiKey, model, {
+            maxRetries: 5,
+            baseDelay: 1200,
+          });
+          all.push(...items);
+          await sleep(800); // spacing between calls
+        }
+        const seen = new Set();
+        return all.filter((it) => {
+          const k = `${it.lat.toFixed(6)},${it.lon.toFixed(6)}`;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+
+      /* ================= App state + map init ================= */
+      let waypoints = [];
+      let is3D = true;
+      let mapReady = false;
+
+      const promptEl = document.getElementById("prompt");
+      const scenesEl = document.getElementById("scenes");
+      const geminiKeyEl = document.getElementById("geminiKey");
+      const modelEl = document.getElementById("model");
+      const plotBtn = document.getElementById("plot");
+      const clearBtn = document.getElementById("clear");
+      const listEl = document.getElementById("list");
+      const errEl = document.getElementById("err");
+      const tileWarnEl = document.getElementById("tileWarn");
+      const terrainSwitch = document.getElementById("terrainSwitch");
+      const tiltBtn = document.getElementById("tilt");
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: osmRaster(),
+        center: [-0.1278, 51.5074],
+        zoom: 11,
+        pitch: 55,
+        bearing: -16,
+        antialias: true,
       });
-    }
-    function moveItem(index,dir){ const j=index+dir; if(j<0||j>=waypoints.length) return; const a=[...waypoints]; [a[index],a[j]]=[a[j],a[index]]; waypoints=a; sync(); }
-    function removeItem(index){ waypoints=waypoints.filter((_,i)=>i!==index); sync(); }
-  </script>
-</body>
+      map.addControl(
+        new maplibregl.NavigationControl({ visualizePitch: true }),
+        "top-right"
+      );
+      function ensureSources() {
+        if (!map.getSource("route-points"))
+          map.addSource("route-points", { type: "geojson", data: toFC([]) });
+        if (!map.getSource("route-line"))
+          map.addSource("route-line", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+          });
+        if (!map.getLayer("route-line-layer"))
+          map.addLayer({
+            id: "route-line-layer",
+            type: "line",
+            source: "route-line",
+            layout: { "line-join": "round", "line-cap": "round" },
+            paint: {
+              "line-color": "#ff2d55",
+              "line-width": 6,
+              "line-opacity": 1,
+            },
+          });
+        if (!map.getLayer("route-dot-layer"))
+          map.addLayer({
+            id: "route-dot-layer",
+            type: "circle",
+            source: "route-points",
+            paint: {
+              "circle-radius": 8,
+              "circle-color": "#111827",
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 2,
+            },
+          });
+        if (!map.getLayer("route-number-layer"))
+          map.addLayer({
+            id: "route-number-layer",
+            type: "symbol",
+            source: "route-points",
+            layout: {
+              "text-field": ["to-string", ["get", "order"]],
+              "text-size": 12,
+              "text-offset": [0, 1.05],
+              "text-anchor": "top",
+            },
+            paint: {
+              "text-color": "#111827",
+              "text-halo-width": 1,
+              "text-halo-color": "#ffffff",
+            },
+          });
+        if (!map.getSource("terrain")) {
+          try {
+            map.addSource("terrain", {
+              type: "raster-dem",
+              tiles: [
+                "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+              ],
+              tileSize: 256,
+              maxzoom: 15,
+              encoding: "terrarium",
+            });
+            map.setTerrain({ source: "terrain", exaggeration: 1.4 });
+            if (!map.getLayer("sky"))
+              map.addLayer({
+                id: "sky",
+                type: "sky",
+                paint: {
+                  "sky-type": "atmosphere",
+                  "sky-atmosphere-sun": [0, 0],
+                  "sky-atmosphere-sun-intensity": 12,
+                },
+              });
+          } catch (_) {}
+        }
+      }
+      map.on("load", () => {
+        ensureSources();
+        mapReady = true;
+      });
+      map.on("error", (e) => {
+        const msg = (e && e.error && e.error.message) || "";
+        if (/AJAXError|403|Failed|Network/i.test(msg)) {
+          tileWarnEl.style.display = "block";
+          tileWarnEl.textContent =
+            "Map tiles failed to load. Try again later or use your own provider/API key.";
+        }
+      });
+
+      /* ================= UI actions ================= */
+      clearBtn.addEventListener("click", () => {
+        waypoints = [];
+        errEl.style.display = "none";
+        sync();
+      });
+      terrainSwitch.addEventListener("click", () => {
+        const on = terrainSwitch.getAttribute("data-on") === "true";
+        terrainSwitch.setAttribute("data-on", String(!on));
+        is3D = !on;
+        applyTerrain();
+      });
+      terrainSwitch.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          terrainSwitch.click();
+        }
+      });
+      tiltBtn.addEventListener("click", () => {
+        const target = map.getPitch() > 5 ? 0 : 55;
+        map.easeTo({ pitch: target, duration: 450 });
+      });
+
+      plotBtn.addEventListener("click", async () => {
+        errEl.style.display = "none";
+        try {
+          if (!mapReady) await new Promise((r) => map.once("load", r));
+          ensureSources();
+
+          const mainPrompt = promptEl.value || "";
+          const extraLines = scenesEl.value
+            .split(/\n|,/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const fullPrompt = extraLines.length
+            ? mainPrompt + "\n" + extraLines.join("\n")
+            : mainPrompt;
+
+          const key = geminiKeyEl.value.trim();
+          const model = modelEl.value;
+          let stops = [];
+
+          if (key) {
+            try {
+              stops = await aiParsePromptInChunks(fullPrompt, key, model);
+            } catch (aiErr) {
+              // final AI failure → fall back to OSM
+              console.warn("AI failed, using OSM fallback:", aiErr);
+            }
+          }
+
+          if (!stops.length) {
+            // OSM fallback (throttled)
+            const parts = parsePromptItems(fullPrompt);
+            for (let i = 0; i < parts.length; i++) {
+              const { label, address, city } = parts[i];
+              const m = (address || "").match(
+                /(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/
+              );
+              if (m) {
+                stops.push({
+                  id: crypto.randomUUID(),
+                  name: label,
+                  lat: parseFloat(m[1]),
+                  lon: parseFloat(m[2]),
+                });
+                continue;
+              }
+              const hit = await geocodeOSM(address || label, city);
+              if (hit)
+                stops.push({
+                  id: crypto.randomUUID(),
+                  name: label,
+                  lat: hit.lat,
+                  lon: hit.lon,
+                });
+              await sleep(1100);
+            }
+            if (!stops.length)
+              throw new Error(
+                "Couldn’t resolve any stops (quota/rate limit). Try later or shorten the prompt."
+              );
+          }
+
+          waypoints = stops;
+          sync(); // draw static points + full line
+          await flyRoute(map, waypoints, { pitch3d: is3D }); // animate
+        } catch (ex) {
+          errEl.textContent = ex?.message || "Failed to plot route.";
+          errEl.style.display = "block";
+        }
+      });
+
+      /* ================= Render & terrain ================= */
+      function sync() {
+        ensureSources();
+        const points = toFC(waypoints);
+        const line = toLine(waypoints);
+        map.getSource("route-points")?.setData(points);
+        map
+          .getSource("route-line")
+          ?.setData(
+            line
+              ? { type: "FeatureCollection", features: [line] }
+              : { type: "FeatureCollection", features: [] }
+          );
+        renderList();
+        if (waypoints.length) {
+          const b = new maplibregl.LngLatBounds();
+          waypoints.forEach((p) => b.extend([p.lon, p.lat]));
+          map.fitBounds(b, { padding: 80, duration: 700 });
+        }
+      }
+      function applyTerrain() {
+        try {
+          ensureSources();
+          if (is3D) {
+            if (map.getSource("terrain"))
+              map.setTerrain({ source: "terrain", exaggeration: 1.4 });
+            map.setPitch(55);
+          } else {
+            map.setTerrain(undefined);
+            map.setPitch(0);
+          }
+        } catch (_) {}
+      }
+      function renderList() {
+        listEl.innerHTML = "";
+        if (!waypoints.length) {
+          const p = document.createElement("p");
+          p.className = "muted";
+          p.textContent = "No waypoints yet.";
+          listEl.appendChild(p);
+          return;
+        }
+        waypoints.forEach((w, i) => {
+          const row = document.createElement("div");
+          row.className = "item";
+          const left = document.createElement("div");
+          left.className = "row";
+          const chip = document.createElement("div");
+          chip.className = "chip";
+          chip.textContent = String(i + 1);
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          const t = document.createElement("div");
+          t.className = "title";
+          t.textContent = w.name;
+          const s = document.createElement("div");
+          s.className = "sub";
+          s.textContent = `${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}`;
+          meta.appendChild(t);
+          meta.appendChild(s);
+          left.appendChild(chip);
+          left.appendChild(meta);
+          const right = document.createElement("div");
+          right.className = "row";
+          const up = document.createElement("button");
+          up.className = "iconbtn";
+          up.textContent = "↑";
+          const down = document.createElement("button");
+          down.className = "iconbtn";
+          down.textContent = "↓";
+          const del = document.createElement("button");
+          del.className = "iconbtn";
+          del.textContent = "✕";
+          up.addEventListener("click", () => moveItem(i, -1));
+          down.addEventListener("click", () => moveItem(i, 1));
+          del.addEventListener("click", () => removeItem(i));
+          right.appendChild(up);
+          right.appendChild(down);
+          right.appendChild(del);
+          row.appendChild(left);
+          row.appendChild(right);
+          listEl.appendChild(row);
+        });
+      }
+      function moveItem(index, dir) {
+        const j = index + dir;
+        if (j < 0 || j >= waypoints.length) return;
+        const a = [...waypoints];
+        [a[index], a[j]] = [a[j], a[index]];
+        waypoints = a;
+        sync();
+      }
+      function removeItem(index) {
+        waypoints = waypoints.filter((_, i) => i !== index);
+        sync();
+      }
+    </script>
+  </body>
 </html>
