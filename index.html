@@ -152,14 +152,12 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       Cambridge: { lat:52.2053, lon:0.1218 },
     };
 
-    // Vague event aliases → specific addresses
     const ADDRESS_ALIASES = [
       { test:/tina\s*turner/i, city:"London", query:"Aldwych Theatre, 49 Aldwych, London WC2B 4DF, UK" },
       { test:/west\s*end\s*theatre/i, city:"London", query:"West End, London, UK" },
       { test:/totally\s*thames/i, city:"London", query:"River Thames, London, UK" },
     ];
 
-    // parse prompt into [{label,address,city}]
     function parsePromptItems(text){
       const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
       const items = [];
@@ -250,7 +248,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
         type: "FeatureCollection",
         features: [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: waypoints.map(p => [p.lon, p.lat]) } }]
       };
-      (map.getSource("route-line") )?.setData(fullLine);
+      map.getSource("route-line")?.setData(fullLine);
 
       if (!map.getSource("route-anim")) {
         map.addSource("route-anim", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -264,7 +262,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       }
 
       let coords = [ [waypoints[0].lon, waypoints[0].lat] ];
-      (map.getSource("route-anim")).setData({
+      map.getSource("route-anim").setData({
         type:"FeatureCollection",
         features:[{ type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates: coords } }]
       });
@@ -275,7 +273,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
         const prev = waypoints[i-1], cur = waypoints[i];
         const brg = bearingBetween(prev.lon, prev.lat, cur.lon, cur.lat);
         coords.push([cur.lon, cur.lat]);
-        (map.getSource("route-anim")).setData({
+        map.getSource("route-anim").setData({
           type:"FeatureCollection",
           features:[{ type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates: coords } }]
         });
@@ -293,6 +291,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
     // ---------------- State & elements ----------------
     let waypoints = [];
     let is3D = true;
+    let mapReady = false;
 
     const promptEl = document.getElementById("prompt");
     const scenesEl = document.getElementById("scenes");
@@ -306,11 +305,11 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
     const terrainSwitch = document.getElementById("terrainSwitch");
     const tiltBtn = document.getElementById("tilt");
 
-    // ---------------- Map init ----------------
+    // ---------------- Map init (DEFAULT: LONDON) ----------------
     const map = new maplibregl.Map({
       container:"map",
       style: buildOSMRasterStyle(),
-      center:[121.5654, 25.033], // default; will auto-fit after plotting
+      center:[-0.1278, 51.5074], // London (lon, lat)
       zoom: 11, pitch: 55, bearing: -16, antialias: true
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), "top-right");
@@ -323,30 +322,52 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       }
     });
 
+    // Wait helpers
+    function waitForStyle(){
+      if (map.isStyleLoaded()) return Promise.resolve();
+      return new Promise(res => map.once("load", res));
+    }
+    function ensureSources(){
+      // idempotent creation of sources & layers if missing
+      if (!map.getSource("route-points")) {
+        map.addSource("route-points", { type:"geojson", data: toFeatureCollection([]) });
+      }
+      if (!map.getSource("route-line")) {
+        map.addSource("route-line", { type:"geojson", data:{ type:"FeatureCollection", features:[] } });
+      }
+      if (!map.getLayer("route-line-layer")) {
+        map.addLayer({ id:"route-line-layer", type:"line", source:"route-line",
+          layout:{ "line-join":"round","line-cap":"round" },
+          paint:{ "line-color":"#2563eb","line-width":4.5,"line-opacity":0.9 } });
+      }
+      if (!map.getLayer("route-dot-layer")) {
+        map.addLayer({ id:"route-dot-layer", type:"circle", source:"route-points",
+          paint:{ "circle-radius":7,"circle-color":"#111827","circle-stroke-color":"#ffffff","circle-stroke-width":2 } });
+      }
+      if (!map.getLayer("route-number-layer")) {
+        map.addLayer({ id:"route-number-layer", type:"symbol", source:"route-points",
+          layout:{ "text-field":["to-string",["get","order"]], "text-size":12, "text-offset":[0,1.05], "text-anchor":"top" },
+          paint:{ "text-color":"#111827","text-halo-width":1,"text-halo-color":"#ffffff" } });
+      }
+      // terrain/sky optional
+      if (!map.getSource("terrain")) {
+        try {
+          map.addSource("terrain", {
+            type:"raster-dem",
+            tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+            tileSize:256, maxzoom:15, encoding:"terrarium"
+          });
+          map.setTerrain({ source:"terrain", exaggeration:1.4 });
+          if (!map.getLayer("sky")) {
+            map.addLayer({ id:"sky", type:"sky", paint:{ "sky-type":"atmosphere","sky-atmosphere-sun":[0,0],"sky-atmosphere-sun-intensity":12 } });
+          }
+        } catch(_) {}
+      }
+    }
+
     map.on("load", () => {
-      try {
-        map.addSource("terrain", {
-          type:"raster-dem",
-          tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-          tileSize:256, maxzoom:15, encoding:"terrarium"
-        });
-        map.setTerrain({ source:"terrain", exaggeration:1.4 });
-        map.addLayer({ id:"sky", type:"sky", paint:{ "sky-type":"atmosphere","sky-atmosphere-sun":[0,0],"sky-atmosphere-sun-intensity":12 } });
-      } catch(_) {}
-
-      map.addSource("route-points", { type:"geojson", data: toFeatureCollection([]) });
-      map.addSource("route-line", { type:"geojson", data: { type:"FeatureCollection", features: [] } });
-
-      map.addLayer({ id:"route-line-layer", type:"line", source:"route-line",
-        layout:{ "line-join":"round","line-cap":"round" },
-        paint:{ "line-color":"#2563eb","line-width":4.5,"line-opacity":0.9 } });
-
-      map.addLayer({ id:"route-dot-layer", type:"circle", source:"route-points",
-        paint:{ "circle-radius":7,"circle-color":"#111827","circle-stroke-color":"#ffffff","circle-stroke-width":2 } });
-
-      map.addLayer({ id:"route-number-layer", type:"symbol", source:"route-points",
-        layout:{ "text-field":["to-string",["get","order"]], "text-size":12, "text-offset":[0,1.05], "text-anchor":"top" },
-        paint:{ "text-color":"#111827","text-halo-width":1,"text-halo-color":"#ffffff" } });
+      ensureSources();
+      mapReady = true;
 
       // Click to add point
       map.on("click", (e) => {
@@ -381,6 +402,9 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
     plotBtn.addEventListener("click", async () => {
       errEl.style.display = "none";
       try{
+        await waitForStyle();
+        ensureSources();
+
         const parsed = parsePromptItems(promptEl.value);
         const fromScenes = scenesEl.value.split(/\n|,/).map(s=>s.trim()).filter(Boolean)
                            .map(a => ({ label:a, address:a, city:null }));
@@ -400,6 +424,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
         waypoints = results;
         // update static map + list immediately
         syncUIAndMap();
+
         // animate the route in 3D (respects toggle)
         await animateRoute(map, waypoints, { pitch3d: is3D });
 
@@ -416,6 +441,9 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
 
     // ---------------- Core sync ----------------
     function syncUIAndMap(){
+      if (!mapReady) return; // avoid racing before load
+      ensureSources();
+
       renderList();
       const pointsFC = toFeatureCollection(waypoints);
       const line = toLineString(waypoints);
@@ -433,6 +461,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
 
     function applyTerrain(){
       try{
+        ensureSources();
         if(is3D){
           if(map.getSource("terrain")) map.setTerrain({ source:"terrain", exaggeration:1.4 });
           map.setPitch(55);
