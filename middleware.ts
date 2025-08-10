@@ -2,37 +2,20 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-type Geo = {
-  city?: string;
-  country?: string;
-  region?: string;
-  latitude?: string;
-  longitude?: string;
-};
-
-function getClientInfo(req: NextRequest) {
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    req.headers.get('x-real-ip') ||
-    undefined;
-
-  const geo: Geo = {
-    city: req.headers.get('x-vercel-ip-city') || undefined,
-    country: req.headers.get('x-vercel-ip-country') || undefined,
-    region: req.headers.get('x-vercel-ip-country-region') || undefined,
-    latitude: req.headers.get('x-vercel-ip-latitude') || undefined,
-    longitude: req.headers.get('x-vercel-ip-longitude') || undefined,
-  };
-
-  return { ip, geo };
-}
-
-export function middleware(req: NextRequest) {
-  const { ip, geo } = getClientInfo(req);
-  // ...your logic using ip/geo...
-  return NextResponse.next();
-}
-
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Skip static assets and API by default while debugging
+  matcher: ['/((?!_next/|favicon.ico|robots.txt|sitemap.xml|api/).*)'],
 };
+
+export function middleware(_req: NextRequest) {
+  try {
+    return NextResponse.next();
+  } catch (err) {
+    const res = NextResponse.next();
+    res.headers.set(
+      'x-middleware-error',
+      err instanceof Error ? err.message : String(err)
+    );
+    return res;
+  }
+}
