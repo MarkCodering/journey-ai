@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { next } from '@vercel/edge';
 
-export default function middleware(req: NextRequest) {
-  return NextResponse.next({
+export default function middleware(req) {
+  return next({
     headers: {
       'Referrer-Policy': 'origin-when-cross-origin',
       'X-Frame-Options': 'DENY',
