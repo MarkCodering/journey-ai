@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Journey Planner – Standalone</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    :root{--bg:#f7f8fb;--panel:#ffffff;--border:#e5e7eb;--text:#0f172a;--muted:#64748b;--shadow:0 8px 22px rgba(2,8,23,.06);--radius:14px}
+    *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:linear-gradient(#f9fafb,#ffffff);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial}
+    .container{max-width:1200px;margin:0 auto}
+    header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.9);backdrop-filter:saturate(180%) blur(6px);border-bottom:1px solid var(--border)}
+    header .inner{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+    .brand{display:flex;gap:8px;align-items:center;font-weight:700}.muted{color:var(--muted);font-size:12px}
+    main{padding:22px 20px 28px}
+    .grid{display:grid;grid-template-columns:360px 1fr;gap:22px}@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+    .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+    .card .header{padding:14px 16px;border-bottom:1px solid var(--border);font-weight:700}.card .content{padding:16px}
+    .col{display:flex;flex-direction:column;gap:8px}.row{display:flex;gap:12px;align-items:center}
+    label{font-size:13px;color:var(--muted)}
+    textarea{width:100%;min-height:110px;resize:vertical;padding:10px 12px;border-radius:12px;border:1px solid var(--border);outline:0;font:inherit;background:#fff}
+    .btn{display:inline-flex;align-items:center;gap:8px;justify-content:center;height:38px;padding:0 14px;border-radius:12px;border:1px solid transparent;font-weight:600;cursor:pointer;user-select:none;transition:.15s}
+    .btn:disabled{opacity:.6;cursor:not-allowed}.btn.primary{background:#111827;color:#fff}.btn.primary:hover{filter:brightness(.95)}
+    .btn.secondary{background:#f3f4f6;color:#0f172a;border-color:#e5e7eb}.btn.secondary:hover{background:#eaecef}
+    .btn.ghost{background:transparent;border:1px solid var(--border)}.btn.destructive{background:#ef4444;color:#fff}
+    .switch{position:relative;width:44px;height:26px;border-radius:999px;background:#d1d5db;transition:.2s;border:1px solid #cfd3da;cursor:pointer}
+    .switch[data-on="true"]{background:#111827;border-color:#111827}.knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15);transition:.2s}
+    .switch[data-on="true"] .knob{transform:translateX(18px)}
+    .list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;padding-right:6px}
+    .chip{width:28px;height:28px;border:1px solid var(--border);border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:12px;color:#0f172a}
+    .item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:12px;padding:8px 10px;background:#fff}
+    .item .meta{min-width:0}.item .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.item .sub{font-size:12px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .iconbtn{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:#fafafa;cursor:pointer}.iconbtn:hover{background:#f0f0f2}
+    .map-wrap{position:relative}#map{width:100%;height:76vh}
+    .map-attrib{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:6px 10px;font-size:11px;color:#475569;background:rgba(255,255,255,.85);backdrop-filter:blur(4px);border-top:1px solid var(--border)}
+    .note{font-size:12px;color:#64748b}.error{color:#b91c1c;font-size:13px}.warn{color:#b45309;font-size:13px}.sticky-side{position:sticky;top:84px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner container">
+      <div class="brand">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 3v18"/></svg>
+        Journey Planner
+      </div>
+      <div class="muted">Click map to add points · Reorder with arrows</div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="grid">
+      <!-- LEFT: controls -->
+      <div class="sticky-side">
+        <div class="card">
+          <div class="header">Plan</div>
+          <div class="content">
+            <div class="col">
+              <label for="prompt">Trip prompt (optional)</label>
+              <textarea id="prompt" placeholder="Paste your plan here…">London – Sept 20–22
+Totally Thames Festival – Along the Thames River, London, UK
+Great River Race Finish & Music – Richmond Riverside, Whittaker Ave, Richmond TW9 1TP, UK
+London Design Festival – Victoria and Albert Museum, Cromwell Rd, London SW7 2RL, UK
+London Fashion Week Public Events – The Store Studios, 180 Strand, London WC2R 1EA, UK
+Open House London – Various locations (e.g., City Hall, Kamal Chunchie Way, London E16 1ZE, UK)
+West End Theatre (Tina Turner Musical) – Aldwych Theatre, 49 Aldwych, London WC2B 4DF, UK
+Southbank Riverside Walk – Queen’s Walk, South Bank, London SE1 8XX, UK
+
+Cambridge – Sept 23–25
+Cambridge Tech Week / Local Talks – Various venues, Cambridge CB2, UK
+Cambridge Market Square – Market Hill, Cambridge CB2 3NJ, UK
+Ceilidh Club / Local Music – Cambridge Junction, Clifton Way, Cambridge CB1 7GX, UK
+Music in the Parks – Jesus Green Park, Cambridge CB4 3AN, UK
+Punting on the River Cam – Mill Ln, Cambridge CB2 1RX, UK
+King’s College Chapel – King’s Parade, Cambridge CB2 1ST, UK
+Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
+            </div>
+
+            <div class="col" style="margin-top:14px">
+              <label for="scenes">Scenes / Stops (one per line). Address or “lat,lon”.</label>
+              <textarea id="scenes" class="resize-none" placeholder="(Optional) Extra stops, one per line…"></textarea>
+
+              <div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px">
+                <button id="addLine" class="btn secondary">➕ Add line</button>
+                <button id="parse" class="btn ghost">🧠 Parse from prompt</button>
+                <button id="plot" class="btn primary">🗺️ Plot route</button>
+                <button id="clear" class="btn destructive">🗑️ Clear</button>
+              </div>
+
+              <div id="err" class="error" style="display:none;margin-top:6px;"></div>
+              <div id="tileWarn" class="warn" style="display:none;margin-top:6px;"></div>
+              <div class="note" style="margin-top:6px">Tip: You can click the map to add waypoints too.</div>
+            </div>
+
+            <div style="margin-top:16px;border:1px solid var(--border);border-radius:12px;padding:10px">
+              <div class="row" style="justify-content:space-between;margin-bottom:4px">
+                <div class="row" style="gap:10px">
+                  <div id="terrainSwitch" class="switch" role="switch" aria-checked="true" data-on="true" tabindex="0"><div class="knob"></div></div>
+                  <label>3D terrain</label>
+                </div>
+                <button id="tilt" class="btn ghost" title="Tilt map">⬈ Tilt</button>
+              </div>
+            </div>
+
+            <div class="col" style="margin-top:14px">
+              <label>Route order</label>
+              <div id="list" class="list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: map -->
+      <div class="card">
+        <div class="header">3D Map View</div>
+        <div class="content" style="padding:0">
+          <div class="map-wrap">
+            <div id="map"></div>
+            <div class="map-attrib">Geocoding by OSM Nominatim (rate-limited). Tiles © OpenStreetMap; Terrain © Mapzen (Terrarium).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <script>
+    // ---- Helpers ----
+    function toFeatureCollection(points){ return { type:"FeatureCollection", features: points.map((p,i)=>({ type:"Feature", properties:{ name:p.name, order:i+1 }, geometry:{ type:"Point", coordinates:[p.lon,p.lat] } })) }; }
+    function toLineString(points){ if(points.length<2) return null; return { type:"Feature", properties:{}, geometry:{ type:"LineString", coordinates: points.map(p=>[p.lon,p.lat]) } }; }
+    function buildOSMRasterStyle(){ return { version:8, sources:{ osm:{ type:"raster", tiles:["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png","https://b.tile.openstreetmap.org/{z}/{x}/{y}.png","https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize:256, maxzoom:19, attribution:"© OpenStreetMap contributors | Terrain © Mapzen (Terrarium)" } }, layers:[{id:"osm",type:"raster",source:"osm"}] }; }
+    async function geocodeOne(q){ const url="https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(q); const res=await fetch(url,{headers:{"Accept-Language":"en"}}); if(!res.ok) throw new Error("Geocode failed for: "+q); const data=await res.json(); if(!data?.length) throw new Error("No match for: "+q); const f=data[0]; return {lat:parseFloat(f.lat),lon:parseFloat(f.lon),display_name:f.display_name}; }
+
+    // ---- NEW: prompt parser ----
+    // Turns freeform itinerary text into a list of address strings.
+    function parsePromptToAddresses(text){
+      const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+      const out = [];
+      const headerRe = /^\s*([A-Za-z\s]+)\s*[–-]\s*(Sept|Sep|October|Oct|Nov|December|Dec|January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jul|July|August|Aug)\b/i;
+
+      for (const line of lines){
+        // skip section headers like "London – Sept 20–22"
+        if (headerRe.test(line) && !/,/.test(line)) continue;
+
+        // prefer address inside (...) if it looks like an address
+        const paren = line.match(/\(([^)]+)\)/);
+        if (paren && /[A-Za-z].*,.+/.test(paren[1])) {
+          // strip leading "e.g.," or similar
+          const inside = paren[1].replace(/^\s*e\.?g\.?,?\s*/i, "").trim();
+          out.push(inside);
+          continue;
+        }
+
+        // otherwise, take text after the LAST dash/en-dash as "address"
+        const parts = line.split(/–|—|-/); // en/em/normal dash
+        if (parts.length >= 2){
+          const addr = parts[parts.length - 1].trim();
+          if (addr) { out.push(addr); continue; }
+        }
+
+        // fallback: if the line already looks like an address, keep it
+        out.push(line);
+      }
+      return out;
+    }
+
+    // ---- State & elements ----
+    let waypoints = [];
+    let is3D = true;
+
+    const promptEl = document.getElementById("prompt");
+    const scenesEl = document.getElementById("scenes");
+    const addLineBtn = document.getElementById("addLine");
+    const parseBtn = document.getElementById("parse");
+    const plotBtn = document.getElementById("plot");
+    const clearBtn = document.getElementById("clear");
+    const listEl = document.getElementById("list");
+    const errEl = document.getElementById("err");
+    const tileWarnEl = document.getElementById("tileWarn");
+    const terrainSwitch = document.getElementById("terrainSwitch");
+    const tiltBtn = document.getElementById("tilt");
+
+    // ---- Map init ----
+    const map = new maplibregl.Map({ container:"map", style: buildOSMRasterStyle(), center:[121.5654,25.033], zoom:11, pitch:55, bearing:-16, antialias:true });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), "top-right");
+
+    map.on("error", (e)=>{ const msg=(e && (e.error && e.error.message))||""; if(/AJAXError|403|Failed to fetch|NetworkError/i.test(msg)){ tileWarnEl.style.display="block"; tileWarnEl.textContent="Map tiles failed to load. Try again later or use your own provider/API key."; } });
+
+    map.on("load", ()=>{
+      try{
+        map.addSource("terrain",{ type:"raster-dem", tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"], tileSize:256, maxzoom:15, encoding:"terrarium" });
+        map.setTerrain({ source:"terrain", exaggeration:1.4 });
+        map.addLayer({ id:"sky", type:"sky", paint:{ "sky-type":"atmosphere","sky-atmosphere-sun":[0,0],"sky-atmosphere-sun-intensity":12 } });
+      }catch(_){}
+
+      map.addSource("route-points",{ type:"geojson", data:toFeatureCollection([]) });
+      map.addSource("route-line",{ type:"geojson", data:{ type:"FeatureCollection", features:[] } });
+
+      map.addLayer({ id:"route-line-layer", type:"line", source:"route-line", layout:{ "line-join":"round","line-cap":"round" }, paint:{ "line-color":"#2563eb","line-width":4.5,"line-opacity":0.9 } });
+      map.addLayer({ id:"route-dot-layer", type:"circle", source:"route-points", paint:{ "circle-radius":7,"circle-color":"#111827","circle-stroke-color":"#ffffff","circle-stroke-width":2 } });
+      map.addLayer({ id:"route-number-layer", type:"symbol", source:"route-points", layout:{ "text-field":["to-string",["get","order"]],"text-size":12,"text-offset":[0,1.05],"text-anchor":"top" }, paint:{ "text-color":"#111827","text-halo-width":1,"text-halo-color":"#ffffff" } });
+
+      map.on("click", (e)=>{
+        const { lngLat } = e;
+        waypoints = [...waypoints, { id:crypto.randomUUID(), name:`Point ${waypoints.length+1}`, lat:lngLat.lat, lon:lngLat.lng }];
+        syncUIAndMap();
+      });
+    });
+
+    // ---- UI actions ----
+    addLineBtn.addEventListener("click", ()=>{ scenesEl.value = (scenesEl.value ? scenesEl.value + "\n" : ""); scenesEl.focus(); });
+
+    parseBtn.addEventListener("click", ()=>{
+      const addrs = parsePromptToAddresses(promptEl.value);
+      if (addrs.length){
+        const existing = scenesEl.value.trim();
+        scenesEl.value = (existing ? existing + "\n" : "") + addrs.join("\n");
+      }
+    });
+
+    clearBtn.addEventListener("click", ()=>{ waypoints=[]; errEl.style.display="none"; syncUIAndMap(); });
+
+    plotBtn.addEventListener("click", async ()=>{
+      errEl.style.display="none";
+      try{
+        // 1) parse addresses from prompt
+        const fromPrompt = parsePromptToAddresses(promptEl.value);
+        // 2) plus any manual lines in Scenes
+        const fromScenes = scenesEl.value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+        const lines = [...fromPrompt, ...fromScenes];
+
+        const results = [];
+        for (const entry of lines){
+          const m = entry.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+          if (m){
+            results.push({ id:crypto.randomUUID(), name:entry, lat:parseFloat(m[1]), lon:parseFloat(m[2]) });
+          } else {
+            const g = await geocodeOne(entry);
+            results.push({ id:crypto.randomUUID(), name:g.display_name, lat:g.lat, lon:g.lon });
+          }
+        }
+        waypoints = results;
+        syncUIAndMap();
+      }catch(ex){
+        errEl.textContent = ex && ex.message ? ex.message : "Failed to geocode.";
+        errEl.style.display="block";
+      }
+    });
+
+    terrainSwitch.addEventListener("click", ()=>{ const on=terrainSwitch.getAttribute("data-on")==="true"; terrainSwitch.setAttribute("data-on", String(!on)); is3D=!on; applyTerrain(); });
+    terrainSwitch.addEventListener("keydown", (e)=>{ if(e.key===" "||e.key==="Enter"){ e.preventDefault(); terrainSwitch.click(); } });
+    tiltBtn.addEventListener("click", ()=>{ const target = map.getPitch()>5 ? 0 : 55; map.easeTo({ pitch:target, duration:450 }); });
+
+    // ---- Core sync ----
+    function syncUIAndMap(){
+      renderList();
+      const pointsFC = toFeatureCollection(waypoints);
+      const line = toLineString(waypoints);
+      const pointSrc = map.getSource("route-points");
+      const lineSrc = map.getSource("route-line");
+      if(pointSrc) pointSrc.setData(pointsFC);
+      if(lineSrc) lineSrc.setData(line ? { type:"FeatureCollection", features:[line] } : { type:"FeatureCollection", features:[] });
+      if(waypoints.length){
+        const b = new maplibregl.LngLatBounds();
+        waypoints.forEach(p=>b.extend([p.lon,p.lat]));
+        map.fitBounds(b,{ padding:80, duration:700 });
+      }
+    }
+    function applyTerrain(){ try{ if(is3D){ if(map.getSource("terrain")) map.setTerrain({ source:"terrain", exaggeration:1.4 }); map.setPitch(55);} else { map.setTerrain(undefined); map.setPitch(0);} }catch(_){} }
+    function renderList(){
+      listEl.innerHTML=""; if(!waypoints.length){ const p=document.createElement("p"); p.className="muted"; p.textContent="No waypoints yet."; listEl.appendChild(p); return; }
+      waypoints.forEach((w,i)=>{
+        const row=document.createElement("div"); row.className="item";
+        const left=document.createElement("div"); left.className="row";
+        const chip=document.createElement("div"); chip.className="chip"; chip.textContent=String(i+1);
+        const meta=document.createElement("div"); meta.className="meta";
+        const t=document.createElement("div"); t.className="title"; t.textContent=w.name;
+        const s=document.createElement("div"); s.className="sub"; s.textContent=`${w.lat.toFixed(5)}, ${w.lon.toFixed(5)}`;
+        meta.appendChild(t); meta.appendChild(s); left.appendChild(chip); left.appendChild(meta);
+        const right=document.createElement("div"); right.className="row";
+        const up=document.createElement("button"); up.className="iconbtn"; up.textContent="↑";
+        const down=document.createElement("button"); down.className="iconbtn"; down.textContent="↓";
+        const del=document.createElement("button"); del.className="iconbtn"; del.textContent="✕";
+        up.addEventListener("click",()=>moveItem(i,-1)); down.addEventListener("click",()=>moveItem(i,1)); del.addEventListener("click",()=>removeItem(i));
+        right.appendChild(up); right.appendChild(down); right.appendChild(del);
+        row.appendChild(left); row.appendChild(right); listEl.appendChild(row);
+      });
+    }
+    function moveItem(index, dir){ const j=index+dir; if(j<0||j>=waypoints.length) return; const a=[...waypoints]; [a[index],a[j]]=[a[j],a[index]]; waypoints=a; syncUIAndMap(); }
+    function removeItem(index){ waypoints=waypoints.filter((_,i)=>i!==index); syncUIAndMap(); }
+
+    // self-tests
+    (function(){ try{ const pts=[{id:"a",name:"A",lat:25,lon:121},{id:"b",name:"B",lat:25.1,lon:121.1},{id:"c",name:"C",lat:25.2,lon:121.2}]; const fc=toFeatureCollection(pts); console.assert(fc.features.length===3); console.assert(fc.features[0].properties.order===1); const ls=toLineString(pts); console.assert(ls&&ls.geometry.coordinates.length===3); const ls2=toLineString(pts.slice(0,1)); console.assert(ls2===null);}catch(e){console.warn("Self-tests failed",e);} })();
+  </script>
+</body>
+</html>
