@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Journey Planner – Standalone (AI + Progress)</title>
+    <title>Journey Planner – Standalone (AI + Progress + Reliable Animation)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
@@ -38,7 +38,7 @@
       .brand { display: flex; gap: 8px; align-items: center; font-weight: 700; }
       .muted { color: var(--muted); font-size: 12px; }
 
-      /* Progress bar under header */
+      /* Progress bar */
       .ai-progress {
         position: sticky; top: 0; z-index: 40;
         height: 8px; background: rgba(16,185,129,.09);
@@ -60,8 +60,6 @@
         display: none;
       }
       .ai-badge.show { display: inline-block; }
-
-      /* progress: indeterminate stripes while waiting on network */
       .ai-bar.indet{ position: relative; overflow: hidden; }
       .ai-bar.indet::after{
         content:""; position:absolute; inset:0;
@@ -247,36 +245,12 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       const aiBar = document.getElementById("aiBar");
       const aiBadge = document.getElementById("aiBadge");
 
-      let _progMax = 100;
-      let _progBase = 0;   // base percent before current step
-      let _progSpan = 100; // span reserved for the current step
-
-      function progShow(label = "AI parsing…", max = 100){
-        _progMax = max; _progBase = 0; _progSpan = max;
-        aiProgress.classList.add("show");
-        aiBar.classList.remove("indet");
-        aiBar.style.width = "0%";
-        aiBadge.textContent = label;
-        aiBadge.classList.add("show");
-      }
-      function progStepReserve(basePercent, spanPercent){
-        _progBase = basePercent;
-        _progSpan = spanPercent;
-      }
-      function progUpdate(localPct, label){
-        const p = _progBase + (_progSpan * Math.max(0, Math.min(100, localPct))/100);
-        aiBar.style.width = Math.max(0, Math.min(100, p)) + "%";
-        if (label) aiBadge.textContent = label;
-      }
-      function progIndeterminate(on = true, label){
-        if (on) aiBar.classList.add("indet"); else aiBar.classList.remove("indet");
-        if (label) aiBadge.textContent = label;
-      }
-      function progHide(){
-        aiBar.classList.remove("indet");
-        aiBar.style.width = "100%";
-        setTimeout(()=>{ aiProgress.classList.remove("show"); aiBadge.classList.remove("show"); }, 350);
-      }
+      let _progBase = 0, _progSpan = 100;
+      function progShow(label="AI parsing…"){ _progBase=0; _progSpan=100; aiProgress.classList.add("show"); aiBar.classList.remove("indet"); aiBar.style.width="0%"; aiBadge.textContent=label; aiBadge.classList.add("show"); }
+      function progStepReserve(basePercent, spanPercent){ _progBase = basePercent; _progSpan = spanPercent; }
+      function progUpdate(localPct, label){ const p = _progBase + (_progSpan * Math.max(0,Math.min(100,localPct))/100); aiBar.style.width = Math.max(0,Math.min(100,p))+"%"; if(label) aiBadge.textContent = label; }
+      function progIndeterminate(on=true,label){ if(on) aiBar.classList.add("indet"); else aiBar.classList.remove("indet"); if(label) aiBadge.textContent=label; }
+      function progHide(){ aiBar.classList.remove("indet"); aiBar.style.width="100%"; setTimeout(()=>{ aiProgress.classList.remove("show"); aiBadge.classList.remove("show"); },350); }
 
       /* ================= Map helpers ================= */
       function osmRaster() {
@@ -310,27 +284,53 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       }
       function toLine(points) {
         if (points.length < 2) return null;
-        return {
-          type: "Feature",
-          properties: {},
-          geometry: { type: "LineString", coordinates: points.map((p) => [p.lon, p.lat]) },
-        };
+        return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: points.map((p)=>[p.lon,p.lat]) } };
       }
       function bearing(lon1, lat1, lon2, lat2) {
-        const R = (d) => (d * Math.PI) / 180, D = (r) => (r * 180) / Math.PI;
-        const φ1 = R(lat1), φ2 = R(lat2), Δλ = R(lon2 - lon1);
-        const y = Math.sin(Δλ) * Math.cos(φ2),
-              x = Math.cos(φ1) * Math.cos(φ2) + Math.sin(φ1) * Math.sin(φ2) * Math.cos(Δλ);
-        return (D(Math.atan2(y, x)) + 360) % 360;
+        const R=(d)=>d*Math.PI/180, D=(r)=>r*180/Math.PI;
+        const φ1=R(lat1), φ2=R(lat2), Δλ=R(lon2-lon1);
+        const y=Math.sin(Δλ)*Math.cos(φ2), x=Math.cos(φ1)*Math.cos(φ2)+Math.sin(φ1)*Math.sin(φ2)*Math.cos(Δλ);
+        return (D(Math.atan2(y,x))+360)%360;
       }
+
+      // Wait until style is fully loaded and renderer is idle
+      function waitForIdle(map, minIdleMs=150){
+        return new Promise((resolve)=>{
+          let idleTimer=null;
+          function arm(){
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(()=>{ map.off('render', arm); resolve(); }, minIdleMs);
+          }
+          map.on('render', arm); // fires every frame; when frames stop for minIdleMs, resolve
+          // Also, if MapLibre thinks it's idle, shortcut:
+          if (!map.isMoving()) arm();
+        });
+      }
+
+      async function ensureMapAreaReady(map){
+        // Ensure canvas knows its final size (sticky/headers can shift things)
+        map.resize();
+        // Give browser a paint
+        await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      }
+
+      async function prepareMapForRoute(map, pts){
+        // Fit bounds instantly to load the right tiles, then wait for idle
+        const b = new maplibregl.LngLatBounds();
+        pts.forEach(p=>b.extend([p.lon,p.lat]));
+        map.fitBounds(b, { padding: 90, duration: 0 }); // no animation
+        await waitForIdle(map, 200);
+        // Nudge zoom to trigger tile selection edge-cases, then idle again
+        map.zoomTo(map.getZoom()+0.001, { duration: 0 });
+        await waitForIdle(map, 120);
+      }
+
       async function flyRoute(map, pts, { pitch3d = true } = {}) {
         if (pts.length < 2) return;
         if (!map.getSource("route-anim")) {
           map.addSource("route-anim", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
           map.addLayer({
-            id: "route-anim-layer",
-            type: "line",
-            source: "route-anim",
+            id: "route-anim-layer", type: "line", source: "route-anim",
             layout: { "line-join": "round", "line-cap": "round" },
             paint: { "line-color": "#10b981", "line-width": 5, "line-opacity": 0.95 },
           });
@@ -366,7 +366,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
         }
         const B = new maplibregl.LngLatBounds();
         pts.forEach((p) => B.extend([p.lon, p.lat]));
-        map.fitBounds(B, { padding: 80, duration: 900 });
+        map.fitBounds(B, { padding: 90, duration: 900 });
       }
 
       /* ================= Parsing + OSM fallback ================= */
@@ -430,12 +430,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
 
       /* ================= Gemini with backoff + chunking + progress ================= */
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      function parseRetryAfter(h) {
-        if (!h) return null;
-        const n = Number(h);
-        if (!Number.isNaN(n) && n > 0) return n * 1000;
-        return null;
-      }
+      function parseRetryAfter(h) { if (!h) return null; const n = Number(h); return (!Number.isNaN(n) && n>0) ? n*1000 : null; }
       function splitIntoChunksByCity(text) {
         const lines = text.split(/\r?\n/);
         const chunks = []; let cur = [];
@@ -450,9 +445,7 @@ Trinity College – Trinity St, Cambridge CB2 1TQ, UK</textarea>
       }
 
       async function aiCallOnce(prompt, apiKey, model, {
-        maxRetries = 4,
-        baseDelay = 1200,
-        onPhase // (pct,label)
+        maxRetries = 4, baseDelay = 1200, onPhase
       } = {}){
         const sys = `You extract trip stops from user text. Use Google Search grounding to disambiguate each stop and return precise WGS84 coordinates.
 Return ONLY minified JSON:
@@ -469,12 +462,10 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
         while (true) {
           onPhase?.(5, `Calling AI… (attempt ${attempt+1})`);
           progIndeterminate(true);
-
           const resp = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
             { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) }
           );
-
           progIndeterminate(false);
 
           if (resp.ok) {
@@ -529,18 +520,17 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
         }
       }
 
-      async function aiParsePromptInChunks(fullPrompt, apiKey, model, { onProgress } = {}){
+      async function aiParsePromptInChunks(fullPrompt, apiKey, model){
         const chunks = splitIntoChunksByCity(fullPrompt);
         const N = chunks.length || 1;
-        const perChunk = 90 / N; // 0–90% across chunks, last 10% merge
+        const perChunk = 90 / N; // reserve 0–90% for chunks; last 10% for merge
 
         const all = [];
         for (let i=0; i<N; i++){
           progStepReserve(i * perChunk, perChunk);
           const items = await aiCallOnce(chunks[i], apiKey, model, {
-            maxRetries: 5,
-            baseDelay: 1200,
-            onPhase: (pct,label)=> { progUpdate(pct, label); onProgress?.(i,N,pct,label); }
+            maxRetries: 5, baseDelay: 1200,
+            onPhase: (pct,label)=> progUpdate(pct, label)
           });
           all.push(...items);
           await new Promise(r=>setTimeout(r, 700));
@@ -628,15 +618,16 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
             });
             map.setTerrain({ source: "terrain", exaggeration: 1.4 });
             if (!map.getLayer("sky"))
-              map.addLayer({
-                id: "sky",
-                type: "sky",
-                paint: { "sky-type": "atmosphere", "sky-atmosphere-sun": [0, 0], "sky-atmosphere-sun-intensity": 12 },
-              });
+              map.addLayer({ id: "sky", type: "sky", paint: { "sky-type": "atmosphere", "sky-atmosphere-sun": [0, 0], "sky-atmosphere-sun-intensity": 12 } });
           } catch (_) {}
         }
       }
-      map.on("load", () => { ensureSources(); mapReady = true; });
+
+      map.on("load", async () => {
+        ensureSources();
+        mapReady = true;
+        await ensureMapAreaReady(map);
+      });
       map.on("error", (e) => {
         const msg = (e && e.error && e.error.message) || "";
         if (/AJAXError|403|Failed|Network/i.test(msg)) {
@@ -644,20 +635,31 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
           tileWarnEl.textContent = "Map tiles failed to load. Try again later or use your own provider/API key.";
         }
       });
+      // Keep canvas sized correctly on window resizes
+      window.addEventListener('resize', () => map.resize(), { passive:true });
 
       /* ================= UI actions ================= */
       clearBtn.addEventListener("click", () => { waypoints = []; errEl.style.display = "none"; sync(); });
-      terrainSwitch.addEventListener("click", () => {
+      terrainSwitch.addEventListener("click", async () => {
         const on = terrainSwitch.getAttribute("data-on") === "true";
-        terrainSwitch.setAttribute("data-on", String(!on)); is3D = !on; applyTerrain();
+        terrainSwitch.setAttribute("data-on", String(!on)); is3D = !on;
+        try {
+          if (is3D) { if (map.getSource("terrain")) map.setTerrain({ source: "terrain", exaggeration: 1.4 }); map.setPitch(55); }
+          else { map.setTerrain(undefined); map.setPitch(0); }
+          await waitForIdle(map, 120);
+        } catch (_) {}
       });
       terrainSwitch.addEventListener("keydown", (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); terrainSwitch.click(); } });
-      tiltBtn.addEventListener("click", () => { const target = map.getPitch() > 5 ? 0 : 55; map.easeTo({ pitch: target, duration: 450 }); });
+      tiltBtn.addEventListener("click", async () => {
+        const target = map.getPitch() > 5 ? 0 : 55; map.easeTo({ pitch: target, duration: 450 });
+        await waitForIdle(map, 120);
+      });
 
       plotBtn.addEventListener("click", async () => {
         errEl.style.display = "none";
         try {
           if (!mapReady) await new Promise((r) => map.once("load", r));
+          await ensureMapAreaReady(map);
           ensureSources();
 
           const mainPrompt = promptEl.value || "";
@@ -671,9 +673,7 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
           if (key) {
             progShow("AI parsing…");
             try {
-              stops = await aiParsePromptInChunks(fullPrompt, key, model, {
-                onProgress: (_i,_N,_pct,_label)=>{} // visuals handled inside helpers
-              });
+              stops = await aiParsePromptInChunks(fullPrompt, key, model);
             } catch (aiErr) {
               console.warn("AI failed, using OSM fallback:", aiErr);
             } finally {
@@ -699,17 +699,24 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
           }
 
           waypoints = stops;
-          sync();                          // draw static points + full line
-          await flyRoute(map, waypoints, { pitch3d: is3D }); // animate
+          sync(); // draw static points + full line (no animation)
+
+          // **NEW**: make sure the map has loaded tiles in view before animating
+          aiBadge.textContent = "Preparing map…";
+          aiBadge.classList.add("show");
+          await prepareMapForRoute(map, waypoints);
+          aiBadge.classList.remove("show");
+
+          await flyRoute(map, waypoints, { pitch3d: is3D });
 
         } catch (ex) {
-          progHide();
+          aiBadge.classList.remove("show");
           errEl.textContent = ex?.message || "Failed to plot route.";
           errEl.style.display = "block";
         }
       });
 
-      /* ================= Render & terrain ================= */
+      /* ================= Render ================= */
       function sync() {
         ensureSources();
         const points = toFC(waypoints);
@@ -720,15 +727,8 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
         if (waypoints.length) {
           const b = new maplibregl.LngLatBounds();
           waypoints.forEach((p) => b.extend([p.lon, p.lat]));
-          map.fitBounds(b, { padding: 80, duration: 700 });
+          map.fitBounds(b, { padding: 90, duration: 0 }); // no animation during sync
         }
-      }
-      function applyTerrain() {
-        try {
-          ensureSources();
-          if (is3D) { if (map.getSource("terrain")) map.setTerrain({ source: "terrain", exaggeration: 1.4 }); map.setPitch(55); }
-          else { map.setTerrain(undefined); map.setPitch(0); }
-        } catch (_) {}
       }
       function renderList() {
         listEl.innerHTML = "";
@@ -755,10 +755,8 @@ Rules: preserve order; pick the most relevant spot for events/areas; give entran
         });
       }
       function moveItem(index, dir) {
-        const j = index + dir;
-        if (j < 0 || j >= waypoints.length) return;
-        const a = [...waypoints]; [a[index], a[j]] = [a[j], a[index]];
-        waypoints = a; sync();
+        const j = index + dir; if (j < 0 || j >= waypoints.length) return;
+        const a = [...waypoints]; [a[index], a[j]] = [a[j], a[index]]; waypoints = a; sync();
       }
       function removeItem(index) {
         waypoints = waypoints.filter((_, i) => i !== index); sync();
